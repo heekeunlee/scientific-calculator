@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>공학용 계산기</title>
+<style>
+  :root {
+    --bg: #12141a; --panel: #1c1f27; --key: #2a2e39; --key-hover: #353a47;
+    --fn: #23324a; --op: #3b4f7a; --eq: #4f7cff; --danger: #7a3b3b;
+    --text: #e8eaf0; --muted: #8a90a2; --accent: #8fb0ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 12px;
+  }
+  .app { display: flex; gap: 12px; width: 100%; max-width: 860px; }
+  .calc {
+    flex: 1; background: var(--panel); border-radius: 18px; padding: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  .status { display: flex; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .status span { padding: 2px 8px; border-radius: 6px; background: var(--key); }
+  .status .on { color: var(--accent); }
+  .display {
+    background: #0d0f14; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+    min-height: 96px; display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .expr { font-size: 18px; color: var(--muted); word-break: break-all; min-height: 24px; }
+  .result { font-size: 34px; text-align: right; word-break: break-all; font-variant-numeric: tabular-nums; }
+  .result.error { color: #ff7b7b; font-size: 22px; }
+  .keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+  button {
+    border: none; border-radius: 10px; padding: 13px 4px; font-size: 16px; color: var(--text);
+    background: var(--key); cursor: pointer; transition: background .1s, transform .05s;
+    font-family: inherit;
+  }
+  button:hover { background: var(--key-hover); }
+  button:active { transform: scale(.96); }
+  .fn { background: var(--fn); font-size: 14px; }
+  .op { background: var(--op); font-size: 18px; }
+  .eq { background: var(--eq); font-weight: 700; font-size: 20px; }
+  .danger { background: var(--danger); }
+  .toggle.active { outline: 2px solid var(--accent); }
+  .history {
+    width: 260px; background: var(--panel); border-radius: 18px; padding: 16px;
+    display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  .history h2 { font-size: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .history h2 button { font-size: 12px; padding: 4px 8px; }
+  #historyList { list-style: none; overflow-y: auto; flex: 1; max-height: 520px; }
+  #historyList li { padding: 8px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; }
+  #historyList li:hover { background: var(--key); }
+  #historyList .h-expr { font-size: 13px; color: var(--muted); word-break: break-all; }
+  #historyList .h-res { font-size: 17px; text-align: right; word-break: break-all; }
+  .empty { color: var(--muted); font-size: 13px; }
+  @media (max-width: 720px) {
+    .app { flex-direction: column; }
+    .history { width: 100%; max-height: 240px; }
+    button { padding: 12px 2px; font-size: 15px; }
+    .fn { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="calc">
+    <div class="status">
+      <span id="angleStatus" class="on">DEG</span>
+      <span id="shiftStatus">2nd</span>
+      <span id="memStatus">M</span>
+    </div>
+    <div class="display">
+      <div class="expr" id="expr"></div>
+      <div class="result" id="result">0</div>
+    </div>
+    <div class="keys" id="keys">
+      <button class="fn toggle" data-act="shift">2nd</button>
+      <button class="fn" data-act="angle" id="angleBtn">DEG</button>
+      <button class="fn" data-act="mc">MC</button>
+      <button class="fn" data-act="mr">MR</button>
+      <button class="fn" data-act="mplus">M+</button>
+      <button class="fn" data-act="mminus">M−</button>
+
+      <button class="fn" data-ins="sin(" data-ins2="asin(" data-lbl2="sin⁻¹">sin</button>
+      <button class="fn" data-ins="cos(" data-ins2="acos(" data-lbl2="cos⁻¹">cos</button>
+      <button class="fn" data-ins="tan(" data-ins2="atan(" data-lbl2="tan⁻¹">tan</button>
+      <button class="fn" data-ins="ln(" data-ins2="e^(" data-lbl2="eˣ">ln</button>
+      <button class="fn" data-ins="log(" data-ins2="10^(" data-lbl2="10ˣ">log</button>
+      <button class="danger" data-act="clear">AC</button>
+
+      <button class="fn" data-ins="sinh(" data-ins2="asinh(" data-lbl2="sinh⁻¹">sinh</button>
+      <button class="fn" data-ins="cosh(" data-ins2="acosh(" data-lbl2="cosh⁻¹">cosh</button>
+      <button class="fn" data-ins="tanh(" data-ins2="atanh(" data-lbl2="tanh⁻¹">tanh</button>
+      <button class="fn" data-ins="^2" data-ins2="^3" data-lbl2="x³">x²</button>
+      <button class="fn" data-ins="^" data-ins2="^(1/" data-lbl2="ʸ√x">xʸ</button>
+      <button data-act="back">⌫</button>
+
+      <button class="fn" data-ins="√(" data-ins2="∛(" data-lbl2="∛">√</button>
+      <button class="fn" data-ins="^(−1)" data-ins2="abs(" data-lbl2="|x|">1/x</button>
+      <button class="fn" data-ins="!" data-ins2=" nCr " data-lbl2="nCr">n!</button>
+      <button class="fn" data-ins="(">(</button>
+      <button class="fn" data-ins=")">)</button>
+      <button class="op" data-ins="÷">÷</button>
+
+      <button class="fn" data-ins="π" data-ins2="e" data-lbl2="e">π</button>
+      <button data-ins="7">7</button>
+      <button data-ins="8">8</button>
+      <button data-ins="9">9</button>
+      <button class="fn" data-ins=" mod " data-ins2=" nPr " data-lbl2="nPr">mod</button>
+      <button class="op" data-ins="×">×</button>
+
+      <button class="fn" data-ins="%">%</button>
+      <button data-ins="4">4</button>
+      <button data-ins="5">5</button>
+      <button data-ins="6">6</button>
+      <button class="fn" data-ins="E">EXP</button>
+      <button class="op" data-ins="−">−</button>
+
+      <button class="fn" data-ins="Ans">Ans</button>
+      <button data-ins="1">1</button>
+      <button data-ins="2">2</button>
+      <button data-ins="3">3</button>
+      <button class="fn" data-act="neg">±</button>
+      <button class="op" data-ins="+">+</button>
+
+      <button class="fn" data-ins="rand" data-ins2="log₂(" data-lbl2="log₂">Rand</button>
+      <button data-ins="0">0</button>
+      <button data-ins="00">00</button>
+      <button data-ins=".">.</button>
+      <button class="eq" data-act="eval" style="grid-column: span 2">=</button>
+    </div>
+  </div>
+
+  <div class="history">
+    <h2>기록 <button data-act="clearHistory">지우기</button></h2>
+    <ul id="historyList"><li class="empty">계산 기록이 없습니다</li></ul>
+  </div>
+</div>
+
+<script id="engine">
+/* ===== 수식 엔진 (eval 미사용, 재귀 하강 파서) ===== */
+const CalcEngine = (() => {
+  const EPS = 1e-12;
+
+  function gamma(z) {
+    if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gamma(1 - z));
+    z -= 1;
+    const g = 7, c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+      771.32342877765313, -176.61502916214059, 12.507343278686905,
+      -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+    let x = c[0];
+    for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+    const t = z + g + 0.5;
+    return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+  }
+
+  function factorial(n) {
+    if (n < 0 && Number.isInteger(n)) throw new Error('음의 정수 팩토리얼은 정의되지 않습니다');
+    if (n > 170) return Infinity;
+    if (Number.isInteger(n)) { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+    return gamma(n + 1);
+  }
+
+  function requireNonNegInt(...xs) {
+    for (const x of xs) if (!Number.isInteger(x) || x < 0) throw new Error('nPr/nCr 은 0 이상의 정수만 가능합니다');
+  }
+  function nPr(n, r) { requireNonNegInt(n, r); if (r > n) return 0; let p = 1; for (let i = 0; i < r; i++) p *= n - i; return p; }
+  function nCr(n, r) { requireNonNegInt(n, r); if (r > n) return 0; r = Math.min(r, n - r); let c = 1; for (let i = 1; i <= r; i++) c = c * (n - r + i) / i; return Math.round(c); }
+
+  // 각도 모드에 따라 삼각함수 처리. 90° 배수 등에서 생기는 미세 오차 정리
+  function makeFunctions(deg) {
+    const toRad = x => deg ? x * Math.PI / 180 : x;
+    const fromRad = x => deg ? x * 180 / Math.PI : x;
+    const clean = x => Math.abs(x) < EPS ? 0 : x;
+    return {
+      sin: x => clean(Math.sin(toRad(x))),
+      cos: x => clean(Math.cos(toRad(x))),
+      tan: x => {
+        const c = Math.cos(toRad(x));
+        if (Math.abs(c) < EPS) throw new Error('tan 값이 정의되지 않습니다');
+        return clean(Math.sin(toRad(x)) / c);
+      },
+      asin: x => { if (x < -1 || x > 1) throw new Error('asin 정의역 오류'); return fromRad(Math.asin(x)); },
+      acos: x => { if (x < -1 || x > 1) throw new Error('acos 정의역 오류'); return fromRad(Math.acos(x)); },
+      atan: x => fromRad(Math.atan(x)),
+      sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+      asinh: Math.asinh,
+      acosh: x => { if (x < 1) throw new Error('acosh 정의역 오류'); return Math.acosh(x); },
+      atanh: x => { if (x <= -1 || x >= 1) throw new Error('atanh 정의역 오류'); return Math.atanh(x); },
+      ln: x => { if (x <= 0) throw new Error('ln 정의역 오류'); return Math.log(x); },
+      log: x => { if (x <= 0) throw new Error('log 정의역 오류'); return Math.log10(x); },
+      'log₂': x => { if (x <= 0) throw new Error('log₂ 정의역 오류'); return Math.log2(x); },
+      log2: x => { if (x <= 0) throw new Error('log₂ 정의역 오류'); return Math.log2(x); },
+      sqrt: x => { if (x < 0) throw new Error('음수의 제곱근은 계산할 수 없습니다'); return Math.sqrt(x); },
+      '√': x => { if (x < 0) throw new Error('음수의 제곱근은 계산할 수 없습니다'); return Math.sqrt(x); },
+      '∛': Math.cbrt, cbrt: Math.cbrt,
+      abs: Math.abs, exp: Math.exp,
+    };
+  }
+
+  const IDENTS = ['asinh', 'acosh', 'atanh', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh',
+    'sin', 'cos', 'tan', 'log₂', 'log2', 'log', 'ln', 'sqrt', 'cbrt', 'abs', 'exp', 'rand',
+    'mod', 'nPr', 'nCr', 'Ans', 'ans', 'pi', 'e'].sort((a, b) => b.length - a.length);
+
+  function tokenize(src) {
+    const s = src.replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-');
+    const tokens = [];
+    let i = 0;
+    while (i < s.length) {
+      const ch = s[i];
+      if (/\s/.test(ch)) { i++; continue; }
+      if (/[0-9.]/.test(ch)) {
+        let j = i;
+        while (j < s.length && /[0-9.]/.test(s[j])) j++;
+        // 지수 표기: 1.5E3, 2E-4
+        if (s[j] === 'E' && /[0-9+\-]/.test(s[j + 1] || '')) {
+          j++;
+          if (s[j] === '+' || s[j] === '-') j++;
+          if (!/[0-9]/.test(s[j] || '')) throw new Error('지수 표기 오류');
+          while (j < s.length && /[0-9]/.test(s[j])) j++;
+        }
+        const text = s.slice(i, j);
+        if ((text.match(/\./g) || []).length > 1 || text === '.') throw new Error(`잘못된 숫자: ${text}`);
+        tokens.push({ type: 'num', value: parseFloat(text) });
+        i = j; continue;
+      }
+      if (ch === '√' || ch === '∛' || ch === 'π') { tokens.push({ type: 'id', value: ch }); i++; continue; }
+      if (/[a-zA-Z₂]/.test(ch)) {
+        // 알려진 이름 중 가장 긴 것부터 매칭 → "esin(30)", "Ansπ" 처럼 붙여 써도 분리됨
+        const name = IDENTS.find(n => s.startsWith(n, i));
+        if (!name) {
+          let j = i;
+          while (j < s.length && /[a-zA-Z0-9₂]/.test(s[j])) j++;
+          throw new Error(`알 수 없는 함수: ${s.slice(i, j)}`);
+        }
+        tokens.push({ type: 'id', value: name });
+        i += name.length; continue;
+      }
+      if ('+-*/^()!%,'.includes(ch)) { tokens.push({ type: 'op', value: ch }); i++; continue; }
+      throw new Error(`알 수 없는 문자: ${ch}`);
+    }
+    return tokens;
+  }
+
+  function evaluate(src, { deg = true, ans = 0, random = Math.random } = {}) {
+    const tokens = tokenize(src);
+    if (tokens.length === 0) throw new Error('수식이 비어 있습니다');
+    const fns = makeFunctions(deg);
+    const consts = { 'π': Math.PI, pi: Math.PI, e: Math.E, Ans: ans, ans: ans };
+    const binWords = { mod: 1, nPr: 1, nCr: 1 };
+    let pos = 0;
+
+    const peek = () => tokens[pos];
+    const isOp = (v) => peek() && peek().type === 'op' && peek().value === v;
+    const expect = (v) => {
+      if (!isOp(v)) throw new Error(v === ')' ? '괄호가 닫히지 않았습니다' : `'${v}' 가 필요합니다`);
+      pos++;
+    };
+    // 암시적 곱셈이 시작될 수 있는 토큰인지 (예: 2π, 3(4), 2sin(30))
+    const startsPrimary = () => {
+      const t = peek();
+      if (!t) return false;
+      if (t.type === 'num') return true;
+      if (t.type === 'id') return !binWords[t.value];
+      return t.value === '(';
+    };
+
+    function parseExpr() {
+      let v = parseTerm();
+      while (isOp('+') || isOp('-')) {
+        const op = tokens[pos++].value;
+        const r = parseTerm();
+        v = op === '+' ? v + r : v - r;
+      }
+      return v;
+    }
+
+    function parseTerm() {
+      let v = parseUnary();
+      for (;;) {
+        if (isOp('*') || isOp('/')) {
+          const op = tokens[pos++].value;
+          const r = parseUnary();
+          if (op === '/') { if (r === 0) throw new Error('0으로 나눌 수 없습니다'); v /= r; }
+          else v *= r;
+        } else if (peek() && peek().type === 'id' && binWords[peek().value]) {
+          const w = tokens[pos++].value;
+          const r = parseUnary();
+          if (w === 'mod') { if (r === 0) throw new Error('0으로 나눌 수 없습니다'); v = ((v % r) + r) % r; }
+          else if (w === 'nPr') v = nPr(v, r);
+          else v = nCr(v, r);
+        } else if (startsPrimary()) {
+          v *= parsePower();
+        } else break;
+      }
+      return v;
+    }
+
+    function parseUnary() {
+      if (isOp('-')) { pos++; return -parseUnary(); }
+      if (isOp('+')) { pos++; return parseUnary(); }
+      return parsePower();
+    }
+
+    // 거듭제곱은 오른쪽 결합: 2^3^2 = 2^9, -2^2 = -4
+    function parsePower() {
+      const base = parsePostfix();
+      if (isOp('^')) {
+        pos++;
+        const exp = parseUnary();
+        if (base === 0 && exp < 0) throw new Error('0으로 나눌 수 없습니다');
+        const r = Math.pow(base, exp);
+        if (Number.isNaN(r)) {
+          // 음수의 홀수 제곱근 (예: (-8)^(1/3)) 은 실수 결과 제공
+          const inv = 1 / exp;
+          if (base < 0 && Math.abs(inv - Math.round(inv)) < 1e-9 && Math.round(inv) % 2 !== 0) {
+            return -Math.pow(-base, exp);
+          }
+          throw new Error('실수 범위에서 계산할 수 없습니다');
+        }
+        return r;
+      }
+      return base;
+    }
+
+    function parsePostfix() {
+      let v = parsePrimary();
+      for (;;) {
+        if (isOp('!')) { pos++; v = factorial(v); }
+        else if (isOp('%')) { pos++; v = v / 100; }
+        else break;
+      }
+      return v;
+    }
+
+    function parsePrimary() {
+      const t = peek();
+      if (!t) throw new Error('수식이 완성되지 않았습니다');
+      if (t.type === 'num') { pos++; return t.value; }
+      if (t.type === 'op' && t.value === '(') {
+        pos++;
+        const v = parseExpr();
+        expect(')');
+        return v;
+      }
+      if (t.type === 'id') {
+        pos++;
+        if (t.value === 'rand') return random();
+        if (t.value in consts) return consts[t.value];
+        if (t.value in fns) {
+          // 괄호 없는 √9, √π 같은 표기도 허용
+          if (isOp('(')) { pos++; const a = parseExpr(); expect(')'); return fns[t.value](a); }
+          return fns[t.value](parsePostfix());
+        }
+        throw new Error(`알 수 없는 함수: ${t.value}`);
+      }
+      throw new Error(`예상치 못한 기호: ${t.value}`);
+    }
+
+    const result = parseExpr();
+    if (pos < tokens.length) {
+      const t = tokens[pos];
+      throw new Error(t.value === ')' ? '괄호 짝이 맞지 않습니다' : `예상치 못한 기호: ${t.value}`);
+    }
+    if (!Number.isFinite(result)) throw new Error(Number.isNaN(result) ? '정의되지 않은 값' : '오버플로');
+    return result;
+  }
+
+  function format(x) {
+    if (x === 0) return '0';
+    const abs = Math.abs(x);
+    if (abs >= 1e15 || abs < 1e-9) {
+      return x.toExponential(10).replace(/\.?0+e/, 'e').replace('e+', 'E').replace('e-', 'E-');
+    }
+    return String(parseFloat(x.toPrecision(12)));
+  }
+
+  return { evaluate, format, tokenize };
+})();
+if (typeof module !== 'undefined') module.exports = CalcEngine;
+</script>
+
+<script>
+/* ===== UI ===== */
+(() => {
+  const exprEl = document.getElementById('expr');
+  const resultEl = document.getElementById('result');
+  const historyList = document.getElementById('historyList');
+  const keys = document.getElementById('keys');
+
+  const saved = JSON.parse(localStorage.getItem('sciCalcState') || '{}');
+  const state = {
+    expr: '',
+    ans: saved.ans || 0,
+    memory: saved.memory || 0,
+    deg: saved.deg !== undefined ? saved.deg : true,
+    shift: false,
+    justEvaluated: false,
+    history: saved.history || [],
+  };
+
+  const persist = () => localStorage.setItem('sciCalcState', JSON.stringify({
+    ans: state.ans, memory: state.memory, deg: state.deg, history: state.history.slice(0, 50),
+  }));
+
+  function preview() {
+    if (!state.expr) return;
+    try {
+      const v = CalcEngine.evaluate(state.expr, { deg: state.deg, ans: state.ans, random: () => NaN });
+      if (!Number.isNaN(v)) { resultEl.textContent = CalcEngine.format(v); resultEl.classList.remove('error'); }
+    } catch { /* 입력 중 미완성 수식은 미리보기 생략 */ }
+  }
+
+  function render() {
+    exprEl.textContent = state.expr;
+    document.getElementById('angleBtn').textContent = state.deg ? 'DEG' : 'RAD';
+    document.getElementById('angleStatus').textContent = state.deg ? 'DEG' : 'RAD';
+    document.getElementById('shiftStatus').classList.toggle('on', state.shift);
+    document.getElementById('memStatus').classList.toggle('on', state.memory !== 0);
+    keys.querySelector('[data-act="shift"]').classList.toggle('active', state.shift);
+    keys.querySelectorAll('[data-ins2]').forEach(b => {
+      if (!b.dataset.lbl1) b.dataset.lbl1 = b.textContent;
+      b.textContent = state.shift ? b.dataset.lbl2 : b.dataset.lbl1;
+    });
+  }
+
+  function renderHistory() {
+    if (!state.history.length) { historyList.innerHTML = '<li class="empty">계산 기록이 없습니다</li>'; return; }
+    historyList.innerHTML = '';
+    state.history.forEach(h => {
+      const li = document.createElement('li');
+      const e = document.createElement('div'); e.className = 'h-expr'; e.textContent = h.expr + ' =';
+      const r = document.createElement('div'); r.className = 'h-res'; r.textContent = h.result;
+      li.append(e, r);
+      li.onclick = () => { state.expr = h.expr; state.justEvaluated = false; render(); preview(); };
+      historyList.appendChild(li);
+    });
+  }
+
+  function insert(text) {
+    // 계산 직후 연산자를 누르면 Ans 이어서 계산, 숫자/함수를 누르면 새로 시작
+    if (state.justEvaluated) {
+      if (/^[+×÷−^!%]|^ mod | ^ n[PC]r /.test(text)) state.expr = 'Ans';
+      else state.expr = '';
+      state.justEvaluated = false;
+    }
+    state.expr += text;
+    resultEl.classList.remove('error');
+    render(); preview();
+  }
+
+  function currentValue() {
+    if (!state.expr) return state.justEvaluated ? state.ans : 0;
+    return CalcEngine.evaluate(state.expr, { deg: state.deg, ans: state.ans });
+  }
+
+  function showError(msg) { resultEl.textContent = msg; resultEl.classList.add('error'); }
+
+  function evaluateNow() {
+    if (!state.expr) return;
+    // 열린 괄호 자동 닫기
+    const open = (state.expr.match(/\(/g) || []).length - (state.expr.match(/\)/g) || []).length;
+    const expr = state.expr + ')'.repeat(Math.max(0, open));
+    try {
+      const v = CalcEngine.evaluate(expr, { deg: state.deg, ans: state.ans });
+      const formatted = CalcEngine.format(v);
+      state.ans = v;
+      state.history.unshift({ expr, result: formatted });
+      state.history = state.history.slice(0, 50);
+      state.expr = expr;
+      exprEl.textContent = expr + ' =';
+      resultEl.textContent = formatted;
+      resultEl.classList.remove('error');
+      state.justEvaluated = true;
+      persist(); renderHistory();
+    } catch (err) { showError(err.message); }
+  }
+
+  const actions = {
+    shift: () => { state.shift = !state.shift; render(); },
+    angle: () => { state.deg = !state.deg; persist(); render(); preview(); },
+    clear: () => { state.expr = ''; state.justEvaluated = false; resultEl.textContent = '0'; resultEl.classList.remove('error'); render(); },
+    back: () => {
+      if (state.justEvaluated) { actions.clear(); return; }
+      // 함수명·단어 단위로 지우기 (sin( 를 한 번에)
+      const m = state.expr.match(/(asinh|acosh|atanh|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|log₂|log|ln|abs|e\^|10\^)\($|( mod | nPr | nCr )$|Ans$|rand$|\^\(−1\)$|\^\(1\/$/);
+      state.expr = m ? state.expr.slice(0, -m[0].length) : state.expr.slice(0, -1);
+      if (!state.expr) resultEl.textContent = '0';
+      render(); preview();
+    },
+    neg: () => {
+      if (state.justEvaluated) { state.expr = '−(Ans)'; state.justEvaluated = false; }
+      else if (/^−\(.*\)$/.test(state.expr)) state.expr = state.expr.slice(2, -1);
+      else state.expr = state.expr ? `−(${state.expr})` : '−';
+      render(); preview();
+    },
+    eval: evaluateNow,
+    mc: () => { state.memory = 0; persist(); render(); },
+    mr: () => insert(CalcEngine.format(state.memory).replace('-', '−')),
+    mplus: () => { try { state.memory += currentValue(); persist(); render(); } catch (e) { showError(e.message); } },
+    mminus: () => { try { state.memory -= currentValue(); persist(); render(); } catch (e) { showError(e.message); } },
+    clearHistory: () => { state.history = []; persist(); renderHistory(); },
+  };
+
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.act) actions[b.dataset.act]();
+    else if (b.dataset.ins) {
+      insert(state.shift && b.dataset.ins2 ? b.dataset.ins2 : b.dataset.ins);
+      if (state.shift) { state.shift = false; render(); }
+    }
+  });
+
+  // 키보드 입력 지원
+  document.addEventListener('keydown', e => {
+    const k = e.key;
+    const map = { '*': '×', '/': '÷', '-': '−', '+': '+', '^': '^', '(': '(', ')': ')', '.': '.', '!': '!', '%': '%' };
+    if (/^[0-9]$/.test(k)) insert(k);
+    else if (map[k]) { e.preventDefault(); insert(map[k]); }
+    else if (k === 'Enter' || k === '=') { e.preventDefault(); evaluateNow(); }
+    else if (k === 'Backspace') actions.back();
+    else if (k === 'Escape' || k === 'Delete') actions.clear();
+    else if (k === 'p') insert('π');
+    else if (k === 'e') insert('e');
+    else if (k === 's') insert('sin(');
+    else if (k === 'c') insert('cos(');
+    else if (k === 't') insert('tan(');
+    else if (k === 'l') insert('ln(');
+    else if (k === 'r') insert('√(');
+  });
+
+  render(); renderHistory();
+})();
+</script>
+</body>
+</html>
